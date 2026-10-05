@@ -14,7 +14,8 @@ interface FilterChipsProps {
 
 export function FilterChips({ options, selected, onSelect, leadingIcon }: FilterChipsProps) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    // flexGrow 0: a horizontal ScrollView in a column would otherwise grow to fill the height and stretch the chips
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroll} contentContainerStyle={styles.row}>
       {options.map((option, index) => {
         const isSelected = selected === option;
         return (
@@ -34,7 +35,11 @@ export function FilterChips({ options, selected, onSelect, leadingIcon }: Filter
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flexGrow: 0,
+  },
   row: {
+    alignItems: 'center',
     gap: Spacing.xs,
     paddingVertical: Spacing.xxs,
   },

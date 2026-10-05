@@ -4,12 +4,18 @@ import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { AppNotification } from '@/types/notification';
+import { formatDisplayDate } from '@/utils/date';
 
 export function NotificationItem({ notification }: { notification: AppNotification }) {
   return (
-    <View style={[styles.container, !notification.isRead && styles.unread]}>
+    <View style={styles.container}>
       <Text style={styles.title}>{notification.title}</Text>
-      <Text style={styles.message}>{notification.message}</Text>
+      {notification.message ? <Text style={styles.message}>{notification.message}</Text> : null}
+      <Text style={styles.meta}>
+        {notification.validTill
+          ? `Valid till ${formatDisplayDate(notification.validTill)}`
+          : formatDisplayDate(notification.postedOn)}
+      </Text>
     </View>
   );
 }
@@ -23,10 +29,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     gap: 4,
   },
-  unread: {
-    backgroundColor: Colors.primaryLight,
-    borderColor: Colors.primaryLight,
-  },
   title: {
     ...Typography.bodyBold,
     color: Colors.text,
@@ -34,5 +36,9 @@ const styles = StyleSheet.create({
   message: {
     ...Typography.caption,
     color: Colors.textSecondary,
+  },
+  meta: {
+    ...Typography.small,
+    color: Colors.textMuted,
   },
 });

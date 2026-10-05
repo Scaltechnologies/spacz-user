@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
@@ -7,14 +8,18 @@ import { Typography } from '@/constants/typography';
 interface ExclusiveBannerProps {
   title: string;
   description: string;
+  onPress?: () => void;
 }
 
-export function ExclusiveBanner({ title, description }: ExclusiveBannerProps) {
+export function ExclusiveBanner({ title, description, onPress }: ExclusiveBannerProps) {
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.description}>{description}</Text>
-    </View>
+    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      <View style={styles.text}>
+        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.description}>{description}</Text>
+      </View>
+      {onPress ? <Ionicons name="chevron-forward" size={20} color={Colors.white} /> : null}
+    </Pressable>
   );
 }
 
@@ -23,6 +28,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryDark,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
+  pressed: {
+    opacity: 0.9,
+  },
+  text: {
+    flex: 1,
     gap: Spacing.xxs,
   },
   title: {

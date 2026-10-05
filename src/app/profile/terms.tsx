@@ -4,15 +4,15 @@ import { LegalDocument } from '@/components/common/LegalDocument';
 const SECTIONS = [
   {
     heading: 'Section 1 — Acceptance of Terms',
-    body: 'By creating an account and using the SPACZ app, you agree to be bound by these terms and conditions and our booking policies for study centres and meal providers.',
+    body: 'By creating an account and using the SPACZ app, you agree to be bound by these terms and conditions and our booking policies for study centres.',
   },
   {
     heading: 'Section 2 — Bookings',
-    body: 'All seat and meal card bookings are subject to availability. Prices, discounts, and slot availability shown in the app may change without prior notice.',
+    body: 'All seat bookings are subject to availability. Prices, discounts, and slot availability shown in the app may change without prior notice.',
   },
   {
     heading: 'Section 3 — Cancellations & Refunds',
-    body: 'Cancellation and refund eligibility depends on the individual study centre or meal provider policy. Please review the specific centre details before booking.',
+    body: 'Cancellation and refund eligibility depends on the individual study centre policy. Please review the specific centre details before booking.',
   },
   {
     heading: 'Section 4 — User Conduct',

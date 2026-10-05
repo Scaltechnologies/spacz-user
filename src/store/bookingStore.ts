@@ -1,10 +1,15 @@
 import { create } from 'zustand';
 
-import { DurationOption, PriceBreakup } from '@/types/booking';
+import { DurationOption } from '@/types/booking';
 
 export interface SelectedSeat {
+  /** Backend seatId — what the booking API receives. */
   id: string;
   label: string;
+  blockId: string;
+  blockName: string;
+  pricePerDay: number;
+  pricePerMonth: number | null;
 }
 
 interface BookingState {
@@ -13,12 +18,9 @@ interface BookingState {
   validFrom: string | null;
   durationDays: DurationOption;
   selectedSeats: SelectedSeat[];
-  priceBreakup: PriceBreakup | null;
   setStudyCentreId: (id: string) => void;
-  setSeatCount: (count: number) => void;
   setDateAndDuration: (validFrom: string, durationDays: DurationOption) => void;
   toggleSeat: (seat: SelectedSeat) => void;
-  setPriceBreakup: (breakup: PriceBreakup) => void;
   reset: () => void;
 }
 
@@ -28,7 +30,6 @@ const initialState = {
   validFrom: null,
   durationDays: 30 as DurationOption,
   selectedSeats: [] as SelectedSeat[],
-  priceBreakup: null,
 };
 
 export const useBookingStore = create<BookingState>((set, get) => ({
@@ -36,9 +37,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
 
   setStudyCentreId: (id) => set({ studyCentreId: id }),
 
-  setSeatCount: (count) => set({ seatCount: count }),
-
-  setDateAndDuration: (validFrom, durationDays) => set({ validFrom, durationDays }),
+  // Seat availability depends on the dates, so a date change clears the seat selection.
+  setDateAndDuration: (validFrom, durationDays) => set({ validFrom, durationDays, selectedSeats: [] }),
 
   toggleSeat: (seat) => {
     const { selectedSeats, seatCount } = get();
@@ -47,11 +47,12 @@ export const useBookingStore = create<BookingState>((set, get) => ({
       set({ selectedSeats: selectedSeats.filter((item) => item.id !== seat.id) });
       return;
     }
-    if (selectedSeats.length >= seatCount) return;
+    if (selectedSeats.length >= seatCount) {
+      if (seatCount === 1) set({ selectedSeats: [seat] });
+      return;
+    }
     set({ selectedSeats: [...selectedSeats, seat] });
   },
-
-  setPriceBreakup: (breakup) => set({ priceBreakup: breakup }),
 
   reset: () => set({ ...initialState }),
 }));

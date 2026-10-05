@@ -4,6 +4,13 @@ export function formatCurrency(amount: number): string {
   return `${Config.currencySymbol}${Math.round(amount).toLocaleString('en-IN')}`;
 }
 
+/** Monthly price when the hall offers one, otherwise the daily price. */
+export function formatStudyCentrePrice(centre: { pricePerDay: number; pricePerMonth: number | null }): string {
+  return centre.pricePerMonth != null
+    ? `${formatCurrency(centre.pricePerMonth)}/month`
+    : `${formatCurrency(centre.pricePerDay)}/day`;
+}
+
 export function formatPhoneNumber(phoneNumber: string): string {
   const digits = phoneNumber.replace(/\D/g, '');
   if (digits.length !== 10) return phoneNumber;

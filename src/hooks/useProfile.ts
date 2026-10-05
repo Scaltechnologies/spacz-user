@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { errorMessage } from '@/services/api';
 import * as profileService from '@/services/profile.service';
 import { useAuthStore } from '@/store/authStore';
 import { AsyncStatus } from '@/types/common';
-import { User } from '@/types/user';
+import { User, UserProfilePatch } from '@/types/user';
 
 export function useProfile() {
   const [profile, setProfile] = useState<User | null>(null);
@@ -25,28 +26,30 @@ export function useProfile() {
       .then((result) => {
         if (cancelled) return;
         setProfile(result);
+        updateUser(result);
         setStatus('success');
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load profile');
+        setError(errorMessage(err, 'Failed to load profile'));
         setStatus('error');
       });
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, updateUser]);
 
   const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
 
   const update = useCallback(
-    async (patch: Partial<User>) => {
-      const result = await profileService.updateProfile(patch);
+    async (patch: UserProfilePatch) => {
+      if (!profile) throw new Error('Profile is not loaded');
+      const result = await profileService.updateProfile(profile.profile, patch);
       setProfile(result);
       updateUser(result);
       return result;
     },
-    [updateUser]
+    [profile, updateUser]
   );
 
   return { profile, status, error, refresh, update };

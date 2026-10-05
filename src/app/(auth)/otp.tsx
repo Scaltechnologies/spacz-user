@@ -11,14 +11,17 @@ import { Config } from '@/constants/config';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
+import { errorMessage } from '@/services/api';
 import { maskPhoneNumber } from '@/utils/formatting';
 import { validateOtp } from '@/utils/validation';
 
 export default function OtpScreen() {
-  const { pendingPhoneNumber, confirmOtp, sendOtp, isSubmitting } = useAuth();
+  const { pendingPhoneNumber, otpRequest, confirmOtp, sendOtp, isSubmitting } = useAuth();
   const [otp, setOtp] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [secondsLeft, setSecondsLeft] = useState<number>(Config.otpResendSeconds);
+  const [secondsLeft, setSecondsLeft] = useState<number>(
+    otpRequest?.resendAfterSeconds ?? Config.otpResendSeconds
+  );
   // Snapshot taken once at mount, NOT re-evaluated on every render: a successful
   // verification legitimately clears pendingPhoneNumber as part of loginSuccess,
   // and re-checking the live value here would fire this guard right when we're
@@ -58,14 +61,19 @@ export default function OtpScreen() {
       // Surface the actual failure reason (e.g. a genuinely wrong code vs. a
       // missing pending phone number) instead of always showing the same
       // generic text regardless of cause.
-      setError(err instanceof Error ? err.message : 'Invalid OTP. Please try again.');
+      setError(errorMessage(err, 'Invalid OTP. Please try again.'));
     }
   }
 
   async function handleResend() {
     if (!pendingPhoneNumber || secondsLeft > 0) return;
-    await sendOtp(pendingPhoneNumber);
-    setSecondsLeft(Config.otpResendSeconds);
+    setError(null);
+    try {
+      const result = await sendOtp(pendingPhoneNumber);
+      setSecondsLeft(result.resendAfterSeconds);
+    } catch (err) {
+      setError(errorMessage(err, 'Could not resend OTP'));
+    }
   }
 
   const minutes = String(Math.floor(secondsLeft / 60)).padStart(2, '0');
@@ -91,7 +99,7 @@ export default function OtpScreen() {
           </Text>
         )}
 
-        <Text style={styles.devHint}>Dev OTP: {Config.devOtp}</Text>
+        {otpRequest?.devCode ? <Text style={styles.devHint}>Dev OTP: {otpRequest.devCode}</Text> : null}
       </View>
       <Button label="Login" onPress={handleLogin} loading={isSubmitting} style={styles.button} />
     </SafeAreaView>

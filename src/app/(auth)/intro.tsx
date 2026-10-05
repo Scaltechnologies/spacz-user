@@ -21,7 +21,7 @@ export default function IntroScreen() {
         <View style={styles.textBlock}>
           <Text style={styles.title}>Book a seat in near by study circle</Text>
           <Text style={styles.subtitle}>
-            Find and reserve your spot at the best study centres and meal providers near you.
+            Find and reserve your spot at the best study centres near you.
           </Text>
         </View>
 

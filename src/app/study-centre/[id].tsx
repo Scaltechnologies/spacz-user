@@ -1,25 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { BackButton } from '@/components/common/BackButton';
-import { ReviewItem } from '@/components/study-centre/ReviewItem';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
 import { Loader } from '@/components/ui/Loader';
-import { RatingStars } from '@/components/ui/RatingStars';
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
+import { errorMessage } from '@/services/api';
 import * as studyCentreService from '@/services/studyCentre.service';
 import { useBookingStore } from '@/store/bookingStore';
 import { AsyncStatus } from '@/types/common';
 import { StudyCentre } from '@/types/studyCentre';
-import { formatCurrency } from '@/utils/formatting';
+import { formatStudyCentrePrice } from '@/utils/formatting';
 
 export default function StudyCentreDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,9 +28,10 @@ export default function StudyCentreDetailsScreen() {
   const reset = useBookingStore((state) => state.reset);
   const setStudyCentreId = useBookingStore((state) => state.setStudyCentreId);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return;
-    Promise.resolve().then(() => setStatus('loading'));
+    setStatus('loading');
+    setError(null);
     studyCentreService
       .getStudyCentreById(id)
       .then((result) => {
@@ -39,21 +39,26 @@ export default function StudyCentreDetailsScreen() {
         setStatus('success');
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Failed to load study centre');
+        setError(errorMessage(err, 'Failed to load study centre'));
         setStatus('error');
       });
   }, [id]);
+
+  useEffect(() => {
+    Promise.resolve().then(load);
+  }, [load]);
 
   function handleBookNow() {
     if (!studyCentre) return;
     reset();
     setStudyCentreId(studyCentre.id);
-    router.push('/study-centre/select-seats');
+    // The backend allows one booking per student per hall for overlapping dates, so exactly one seat is booked.
+    router.push('/study-centre/select-date');
   }
 
   if (status === 'loading' || status === 'idle') return <Loader fullScreen />;
   if (status === 'error' || !studyCentre) {
-    return <ErrorMessage message={error ?? 'Study centre not found'} />;
+    return <ErrorMessage message={error ?? 'Study centre not found'} onRetry={load} />;
   }
 
   return (
@@ -69,43 +74,29 @@ export default function StudyCentreDetailsScreen() {
               <Text style={styles.timeBadgeText}>24/7</Text>
             </View>
           ) : null}
-          <View style={styles.slotsBadge}>
-            <Text style={styles.slotsBadgeText}>{studyCentre.slotsLeft} Slots left</Text>
-          </View>
+          {studyCentre.slotsLeft != null ? (
+            <View style={styles.slotsBadge}>
+              <Text style={styles.slotsBadgeText}>{studyCentre.slotsLeft} Slots left</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.content}>
           <Text style={styles.name}>{studyCentre.name}</Text>
-          <View style={styles.ratingRow}>
-            <RatingStars rating={studyCentre.rating} size={14} />
-            <Text style={styles.ratingText}>
-              {studyCentre.rating} ({studyCentre.ratingCount.toLocaleString('en-IN')})
-            </Text>
-          </View>
 
           <View style={styles.addressRow}>
             <Ionicons name="location-outline" size={16} color={Colors.textSecondary} />
             <Text style={styles.address}>{studyCentre.fullAddress}</Text>
           </View>
 
-          {studyCentre.discountLabel ? (
-            <View style={styles.discountBanner}>
-              <Ionicons name="pricetag-outline" size={18} color={Colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.discountTitle}>{studyCentre.discountLabel}</Text>
-                <Text style={styles.discountSubtitle}>Book now and save on your first booking.</Text>
-              </View>
-            </View>
-          ) : null}
-
           <View style={styles.priceRow}>
-            <View>
-              {studyCentre.originalPricePerMonth ? (
-                <Text style={styles.originalPrice}>{formatCurrency(studyCentre.originalPricePerMonth)}</Text>
-              ) : null}
-              <Text style={styles.price}>{formatCurrency(studyCentre.pricePerMonth)}/month</Text>
-            </View>
-            <Button label="Book Now" onPress={handleBookNow} icon={<Ionicons name="arrow-forward" size={16} color={Colors.white} />} />
+            <Text style={styles.price}>{formatStudyCentrePrice(studyCentre)}</Text>
+            <Button
+              label="Book Now"
+              onPress={handleBookNow}
+              disabled={studyCentre.slotsLeft === 0}
+              icon={<Ionicons name="arrow-forward" size={16} color={Colors.white} />}
+            />
           </View>
 
           <View style={styles.amenities}>
@@ -114,14 +105,18 @@ export default function StudyCentreDetailsScreen() {
             ))}
           </View>
 
-          <View style={styles.reviewsSection}>
-            <Text style={styles.reviewsTitle}>Reviews</Text>
-            {studyCentre.reviews.length === 0 ? (
-              <Text style={styles.noReviews}>No reviews yet.</Text>
-            ) : (
-              studyCentre.reviews.map((review) => <ReviewItem key={review.id} review={review} />)
-            )}
-          </View>
+          {studyCentre.description ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>About</Text>
+              <Text style={styles.sectionBody}>{studyCentre.description}</Text>
+            </View>
+          ) : null}
+          {studyCentre.rules ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Rules</Text>
+              <Text style={styles.sectionBody}>{studyCentre.rules}</Text>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -176,15 +171,6 @@ const styles = StyleSheet.create({
     ...Typography.h2,
     color: Colors.text,
   },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xxs,
-  },
-  ratingText: {
-    ...Typography.caption,
-    color: Colors.textSecondary,
-  },
   addressRow: {
     flexDirection: 'row',
     gap: Spacing.xxs,
@@ -194,32 +180,11 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     flex: 1,
   },
-  discountBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.primaryLight,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-  },
-  discountTitle: {
-    ...Typography.bodyBold,
-    color: Colors.primaryDark,
-  },
-  discountSubtitle: {
-    ...Typography.small,
-    color: Colors.primaryDark,
-  },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: Spacing.xs,
-  },
-  originalPrice: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    textDecorationLine: 'line-through',
   },
   price: {
     ...Typography.h3,
@@ -231,16 +196,16 @@ const styles = StyleSheet.create({
     gap: Spacing.xxs,
     marginTop: Spacing.xs,
   },
-  reviewsSection: {
+  section: {
     marginTop: Spacing.md,
+    gap: Spacing.xxs,
   },
-  reviewsTitle: {
+  sectionTitle: {
     ...Typography.h3,
     color: Colors.text,
-    marginBottom: Spacing.xs,
   },
-  noReviews: {
-    ...Typography.caption,
-    color: Colors.textMuted,
+  sectionBody: {
+    ...Typography.body,
+    color: Colors.textSecondary,
   },
 });

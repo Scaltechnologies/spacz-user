@@ -12,7 +12,7 @@ const SECTIONS = [
   },
   {
     heading: 'Section 3 — Data Sharing',
-    body: 'We share only the minimum required booking details with partner study centres and meal providers to fulfil your reservation.',
+    body: 'We share only the minimum required booking details with partner study centres to fulfil your reservation.',
   },
   {
     heading: 'Section 4 — Your Rights',

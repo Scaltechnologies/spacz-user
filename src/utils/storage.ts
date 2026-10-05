@@ -48,17 +48,6 @@ export async function removeItem(key: string): Promise<void> {
 
 export const StorageKeys = {
   authToken: 'spacz.auth.token',
-  userId: 'spacz.auth.userId',
+  refreshToken: 'spacz.auth.refreshToken',
 } as const;
 
-export async function saveToken(token: string): Promise<void> {
-  await setItem(StorageKeys.authToken, token);
-}
-
-export async function getToken(): Promise<string | null> {
-  return getItem(StorageKeys.authToken);
-}
-
-export async function removeToken(): Promise<void> {
-  await removeItem(StorageKeys.authToken);
-}

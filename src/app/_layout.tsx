@@ -47,6 +47,7 @@ export default function RootLayout() {
       <Stack.Screen name="study-centre" />
       <Stack.Screen name="bookings" />
       <Stack.Screen name="profile" />
+      <Stack.Screen name="offers" />
     </Stack>
   );
 }

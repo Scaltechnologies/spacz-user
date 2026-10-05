@@ -4,15 +4,17 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Badge } from '@/components/ui/Badge';
+import { PaymentStatusBadge } from '@/components/booking/PaymentStatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Divider } from '@/components/ui/Divider';
+import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Loader } from '@/components/ui/Loader';
 import { Colors } from '@/constants/colors';
 import { Config } from '@/constants/config';
 import { Radius, Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
+import { errorMessage } from '@/services/api';
 import * as bookingService from '@/services/booking.service';
 import { useBookingStore } from '@/store/bookingStore';
 import { Booking } from '@/types/booking';
@@ -20,23 +22,37 @@ import { formatDate } from '@/utils/date';
 import { formatCurrency } from '@/utils/formatting';
 
 export default function ConfirmationScreen() {
-  const { bookingId } = useLocalSearchParams<{ bookingId: string }>();
-  const [booking, setBooking] = useState<Booking | null>(null);
+  const { bookingIds } = useLocalSearchParams<{ bookingIds: string }>();
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
   const resetBookingStore = useBookingStore((state) => state.reset);
 
   useEffect(() => {
-    if (!bookingId) return;
-    bookingService.getBookingById(bookingId).then((result) => {
-      setBooking(result);
-      setIsLoading(false);
-    });
-  }, [bookingId]);
+    const ids = (bookingIds ?? '').split(',').filter(Boolean);
+    if (ids.length === 0) return;
+    Promise.all(ids.map((id) => bookingService.getBookingById(id)))
+      .then(setBookings)
+      .catch((err) => setLoadError(errorMessage(err, 'Failed to load booking')))
+      .finally(() => setIsLoading(false));
+  }, [bookingIds]);
 
+  // The backend has no payment API; POST /api/bookings/{id}/confirm is its post-payment step.
   async function handlePayNow() {
-    if (!booking) return;
-    const updated = await bookingService.payBooking(booking.id);
-    if (updated) setBooking(updated);
+    setIsPaying(true);
+    setPayError(null);
+    try {
+      const updated = await Promise.all(
+        bookings.map((item) => (item.status === 'PENDING' ? bookingService.confirmBooking(item.id) : item))
+      );
+      setBookings(updated);
+    } catch (err) {
+      setPayError(errorMessage(err, 'Could not confirm booking'));
+    } finally {
+      setIsPaying(false);
+    }
   }
 
   function handleBackToHome() {
@@ -44,9 +60,13 @@ export default function ConfirmationScreen() {
     router.replace('/(tabs)/home');
   }
 
-  if (isLoading || !booking) return <Loader fullScreen />;
+  if (loadError) return <ErrorMessage message={loadError} />;
+  if (isLoading || bookings.length === 0) return <Loader fullScreen />;
 
-  const isPaid = booking.paymentStatus === 'PAID';
+  const booking = bookings[0];
+  const amount = bookings.reduce((sum, item) => sum + item.amount, 0);
+  const isPaid = bookings.every((item) => item.paymentStatus === 'PAID');
+  const isPending = bookings.some((item) => item.status === 'PENDING');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -62,7 +82,7 @@ export default function ConfirmationScreen() {
         </Text>
 
         <Text style={styles.bookingIdLabel}>Booking ID</Text>
-        <Text style={styles.bookingId}>{booking.id}</Text>
+        <Text style={styles.bookingId}>{bookings.map((item) => item.reference).join(', ')}</Text>
 
         <Card style={styles.seatCard} noPadding>
           <View style={styles.seatHeader}>
@@ -70,7 +90,7 @@ export default function ConfirmationScreen() {
               <Ionicons name="body-outline" size={20} color={Colors.white} />
             </View>
             <View>
-              <Text style={styles.seatNumber}>{booking.seatNumbers.join(', ')}</Text>
+              <Text style={styles.seatNumber}>{bookings.flatMap((item) => item.seatNumbers).join(', ')}</Text>
               <Text style={styles.seatLabel}>Seat Number</Text>
             </View>
           </View>
@@ -94,29 +114,30 @@ export default function ConfirmationScreen() {
 
             <View style={styles.dateRow}>
               <View>
-                <Text style={styles.dateValue}>{formatCurrency(booking.amount)}</Text>
+                <Text style={styles.dateValue}>{formatCurrency(amount)}</Text>
                 <Text style={styles.dateLabel}>Amount</Text>
               </View>
               <View>
-                <Text style={styles.dateValue}>{booking.durationDays} Days</Text>
+                <Text style={styles.dateValue}>{bookingService.formatBookingDuration(booking)}</Text>
                 <Text style={styles.dateLabel}>Duration</Text>
               </View>
             </View>
 
             <View style={styles.paymentRow}>
               <Text style={styles.dateLabel}>Payment Status</Text>
-              <Badge label={isPaid ? 'Paid' : 'Not Paid'} tone={isPaid ? 'success' : 'error'} />
+              <PaymentStatusBadge status={isPaid ? 'PAID' : booking.paymentStatus} />
             </View>
 
-            {!isPaid ? (
+            {isPending ? (
               <View style={styles.dueRow}>
                 <View>
-                  <Text style={styles.dueAmount}>{formatCurrency(booking.amount)}</Text>
+                  <Text style={styles.dueAmount}>{formatCurrency(amount)}</Text>
                   <Text style={styles.dateLabel}>Total Due</Text>
                 </View>
-                <Button label="Pay Now" onPress={handlePayNow} />
+                <Button label="Pay Now" onPress={handlePayNow} loading={isPaying} />
               </View>
             ) : null}
+            {payError ? <Text style={styles.payError}>{payError}</Text> : null}
           </View>
         </Card>
 
@@ -129,6 +150,10 @@ export default function ConfirmationScreen() {
 }
 
 const styles = StyleSheet.create({
+  payError: {
+    ...Typography.caption,
+    color: Colors.error,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,

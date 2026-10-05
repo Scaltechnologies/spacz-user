@@ -1,10 +1,12 @@
-export type NotificationCategory = 'OFFERS' | 'UPDATES';
+/** admin-service NotificationResponse.type */
+export type NotificationCategory = 'OFFER' | 'UPDATE';
 
 export interface AppNotification {
   id: string;
   category: NotificationCategory;
   title: string;
-  message: string;
+  message: string | null;
   postedOn: string;
-  isRead: boolean;
+  /** OFFER only */
+  validTill: string | null;
 }

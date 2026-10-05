@@ -1,23 +1,19 @@
-import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
 import { BookingCard } from '@/components/booking/BookingCard';
 import { ScreenContainer } from '@/components/common/ScreenContainer';
-import { FilterChips } from '@/components/study-centre/FilterChips';
+import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Loader } from '@/components/ui/Loader';
 import { Spacing } from '@/constants/spacing';
+import { errorMessage } from '@/services/api';
 import * as bookingService from '@/services/booking.service';
 import { AsyncStatus } from '@/types/common';
-import { Booking, BookingType } from '@/types/booking';
+import { Booking } from '@/types/booking';
 import { todayIso } from '@/utils/date';
-
-const TYPE_LABELS: Record<BookingType, string> = {
-  STUDY_CIRCLE: 'Study circle',
-  MEAL_CARD: 'Meal Cards',
-};
 
 type StatusFilter = 'All' | 'Active' | 'Past';
 
@@ -25,19 +21,12 @@ export default function MyBookingsScreen() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [status, setStatus] = useState<AsyncStatus>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<BookingType>('STUDY_CIRCLE');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
 
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
+  const load = useCallback(() => {
     let cancelled = false;
-    Promise.resolve().then(() => {
-      if (!cancelled) {
-        setStatus('loading');
-        setError(null);
-      }
-    });
+    setStatus('loading');
+    setError(null);
     bookingService
       .getMyBookings()
       .then((results) => {
@@ -47,39 +36,35 @@ export default function MyBookingsScreen() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : 'Failed to load bookings');
+        setError(errorMessage(err, 'Failed to load bookings'));
         setStatus('error');
       });
     return () => {
       cancelled = true;
     };
-  }, [reloadToken]);
+  }, []);
 
-  const refresh = useCallback(() => setReloadToken((token) => token + 1), []);
+  // Reload on focus so a booking confirmed on the details screen shows its new status.
+  useFocusEffect(load);
 
   const today = todayIso();
   const filtered = bookings.filter((booking) => {
-    if (booking.type !== typeFilter) return false;
-    if (statusFilter === 'Active') return booking.validTo >= today;
-    if (statusFilter === 'Past') return booking.validTo < today;
+    const isActive = booking.validTo >= today && (booking.status === 'PENDING' || booking.status === 'CONFIRMED');
+    if (statusFilter === 'Active') return isActive;
+    if (statusFilter === 'Past') return !isActive;
     return true;
   });
 
   return (
     <ScreenContainer title="My Bookings" showBackButton>
-      <FilterChips
-        options={['Study circle', 'Meal Cards']}
-        selected={TYPE_LABELS[typeFilter]}
-        onSelect={(value) => setTypeFilter(value === 'Meal Cards' ? 'MEAL_CARD' : 'STUDY_CIRCLE')}
-      />
-      <FilterChips
+      <SegmentedTabs<StatusFilter>
         options={['All', 'Active', 'Past']}
         selected={statusFilter}
-        onSelect={(value) => setStatusFilter((value as StatusFilter) ?? 'All')}
+        onSelect={setStatusFilter}
       />
 
       {status === 'loading' && <Loader />}
-      {status === 'error' && <ErrorMessage message={error ?? 'Something went wrong'} onRetry={refresh} />}
+      {status === 'error' && <ErrorMessage message={error ?? 'Something went wrong'} onRetry={load} />}
       {status === 'success' && filtered.length === 0 && (
         <EmptyState icon="calendar-outline" title="No bookings found" message="Your bookings will show up here" />
       )}

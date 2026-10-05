@@ -4,31 +4,40 @@ import { Divider } from '@/components/ui/Divider';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
-import { PriceBreakup } from '@/types/booking';
+import { BookingQuote } from '@/types/booking';
 import { formatCurrency } from '@/utils/formatting';
 
 interface PriceBreakupCardProps {
   seatNumbers: string[];
-  seatCount: number;
-  pricePerSeat: number;
-  breakup: PriceBreakup;
+  /** Server-computed quote (POST /api/bookings/quote). */
+  quote: BookingQuote;
 }
 
-export function PriceBreakupCard({ seatNumbers, seatCount, pricePerSeat, breakup }: PriceBreakupCardProps) {
+export function PriceBreakupCard({ seatNumbers, quote }: PriceBreakupCardProps) {
+  const unitLabel =
+    quote.plan === 'MONTHLY'
+      ? `${quote.units} Month${quote.units === 1 ? '' : 's'}`
+      : `${quote.units} Day${quote.units === 1 ? '' : 's'}`;
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.seatLabel}>{seatNumbers.join(', ')}</Text>
         <Text style={styles.seatSubtitle}>
-          {seatCount} Seat{seatCount > 1 ? 's' : ''} x {formatCurrency(pricePerSeat)}
+          {unitLabel} x {formatCurrency(quote.unitPrice)}
         </Text>
       </View>
       <Divider style={styles.divider} />
-      <Row label="Discount" value={`-${formatCurrency(breakup.discount)}`} muted={breakup.discount === 0} />
-      <Row label="Platform Charges" value={formatCurrency(breakup.platformCharges)} />
-      <Row label="Taxes" value={formatCurrency(breakup.taxes)} />
+      <Row label="Seat price" value={formatCurrency(quote.baseAmount)} />
+      <Row
+        label={quote.offerTitle ? `Discount (${quote.offerTitle})` : 'Discount'}
+        value={`-${formatCurrency(quote.discountAmount)}`}
+        muted={quote.discountAmount === 0}
+      />
+      <Row label="Platform Charges" value={formatCurrency(quote.platformCharges)} />
+      <Row label="Taxes" value={formatCurrency(quote.taxes)} />
       <Divider style={styles.divider} />
-      <Row label="Total" value={formatCurrency(breakup.total)} bold />
+      <Row label="Total" value={formatCurrency(quote.totalPrice)} bold />
     </View>
   );
 }
@@ -63,11 +72,13 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: Spacing.sm,
     paddingVertical: 2,
   },
   rowLabel: {
     ...Typography.body,
     color: Colors.textSecondary,
+    flexShrink: 1,
   },
   rowLabelBold: {
     ...Typography.bodyBold,

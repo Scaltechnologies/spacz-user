@@ -1,18 +1,25 @@
-import { mockDelay } from '@/services/api';
-import { mockNotifications } from '@/services/mock/notifications.mock';
+import { request } from '@/services/api';
 import { AppNotification, NotificationCategory } from '@/types/notification';
 
-const notificationsStore: AppNotification[] = mockNotifications.map((item) => ({ ...item }));
-
-export async function getNotifications(category?: NotificationCategory): Promise<AppNotification[]> {
-  const results = category
-    ? notificationsStore.filter((item) => item.category === category)
-    : [...notificationsStore];
-  return mockDelay(results);
+interface NotificationResponse {
+  id: number;
+  type: NotificationCategory;
+  title: string;
+  description: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  createdAt: string;
 }
 
-export async function markNotificationRead(id: string): Promise<void> {
-  const notification = notificationsStore.find((item) => item.id === id);
-  if (notification) notification.isRead = true;
-  return mockDelay(undefined);
+/** GET /api/notifications?type= — OFFER = live admin offers, UPDATE = published admin updates. */
+export async function getNotifications(category?: NotificationCategory): Promise<AppNotification[]> {
+  const items = await request<NotificationResponse[]>('/api/notifications', { query: { type: category } });
+  return items.map((item) => ({
+    id: `${item.type}-${item.id}`,
+    category: item.type,
+    title: item.title,
+    message: item.description,
+    postedOn: item.createdAt,
+    validTill: item.endAt,
+  }));
 }

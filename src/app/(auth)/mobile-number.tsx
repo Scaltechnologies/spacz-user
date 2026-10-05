@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { useAuth } from '@/hooks/useAuth';
+import { errorMessage } from '@/services/api';
 import { validateMobileNumber } from '@/utils/validation';
 
 export default function MobileNumberScreen() {
@@ -26,8 +27,8 @@ export default function MobileNumberScreen() {
     try {
       await sendOtp(phoneNumber.trim());
       router.push('/(auth)/otp');
-    } catch {
-      setError('Could not send OTP. Please try again.');
+    } catch (err) {
+      setError(errorMessage(err, 'Could not send OTP. Please try again.'));
     }
   }
 

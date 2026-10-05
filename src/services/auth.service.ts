@@ -1,43 +1,38 @@
-import { mockDelay } from '@/services/api';
-import { mockUser } from '@/services/mock/user.mock';
-import { OtpRequestResult, OtpVerifyResult, RegisterPayload } from '@/types/auth';
-import { User } from '@/types/user';
-import { Config } from '@/constants/config';
+import { ApiError, request } from '@/services/api';
+import { AuthResponse, OtpRequestResult } from '@/types/auth';
+
+/** auth-service phone OTP flow (via gateway). See spacz-platform docs/FRONTEND_INTEGRATION.md §2. */
+export async function requestOtp(phone: string): Promise<OtpRequestResult> {
+  return request<OtpRequestResult>('/api/auth/otp/request', { method: 'POST', body: { phone }, auth: false });
+}
 
 /**
- * Mock auth service. Replace the bodies of these functions with real API calls
- * once the backend is available — hooks/screens depend only on this module's
- * exported signatures, not on how they're implemented.
+ * Verifies the code. Resolves with tokens for an existing account, or `null` when the
+ * backend answers 422 REGISTRATION_REQUIRED (new number — the code stays valid).
  */
-export async function requestOtp(phoneNumber: string): Promise<OtpRequestResult> {
-  return mockDelay({ phoneNumber, expiresInSeconds: Config.otpResendSeconds });
-}
-
-export async function verifyOtp(phoneNumber: string, otp: string): Promise<OtpVerifyResult> {
-  await mockDelay(undefined);
-  const normalizedOtp = otp.trim();
-  if (normalizedOtp !== Config.devOtp) {
-    throw new Error('Invalid OTP. Please try again.');
+export async function verifyOtp(phone: string, code: string): Promise<AuthResponse | null> {
+  try {
+    return await request<AuthResponse>('/api/auth/otp/verify', { method: 'POST', body: { phone, code }, auth: false });
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'REGISTRATION_REQUIRED') return null;
+    throw err;
   }
-  const isNewUser = phoneNumber !== mockUser.phoneNumber;
-  return { isNewUser, token: `mock-token-${phoneNumber}` };
 }
 
-export async function register(payload: RegisterPayload): Promise<User> {
-  return mockDelay({
-    ...mockUser,
-    fullName: payload.fullName,
-    email: payload.email,
-    dateOfBirth: payload.dateOfBirth,
-    aspiringFor: payload.aspiringFor as User['aspiringFor'],
-    isRegistered: true,
+/** Registers a new student: the same verify call repeated with the same code plus role and name. */
+export async function registerWithOtp(
+  phone: string,
+  code: string,
+  firstName: string,
+  lastName: string | null
+): Promise<AuthResponse> {
+  return request<AuthResponse>('/api/auth/otp/verify', {
+    method: 'POST',
+    body: { phone, code, role: 'USER', firstName, lastName: lastName || undefined },
+    auth: false,
   });
 }
 
-export async function getCurrentUser(): Promise<User> {
-  return mockDelay(mockUser);
-}
-
-export async function logout(): Promise<void> {
-  return mockDelay(undefined);
+export async function logout(refreshToken: string): Promise<void> {
+  await request<void>('/api/auth/logout', { method: 'POST', body: { refreshToken }, auth: false });
 }

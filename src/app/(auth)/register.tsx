@@ -1,24 +1,27 @@
 import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
+import { ErrorMessage } from '@/components/ui/ErrorMessage';
 import { Input } from '@/components/ui/Input';
+import { Loader } from '@/components/ui/Loader';
 import { Colors } from '@/constants/colors';
 import { Radius, Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useAuth } from '@/hooks/useAuth';
-import { ASPIRING_CATEGORIES, AspiringCategory } from '@/types/common';
-import { validateEmail, validateFullName } from '@/utils/validation';
+import { usePrograms } from '@/hooks/useStudyCentres';
+import { errorMessage } from '@/services/api';
+import { parseDisplayDate, validateFullName } from '@/utils/validation';
 
 export default function RegisterScreen() {
   const { pendingPhoneNumber, completeRegistration, isSubmitting } = useAuth();
+  const { programs, status: programsStatus, error: programsError, refresh: reloadPrograms } = usePrograms();
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
-  const [aspiringFor, setAspiringFor] = useState<AspiringCategory[]>([]);
-  const [errors, setErrors] = useState<{ fullName?: string; email?: string }>({});
+  const [aspiringFor, setAspiringFor] = useState<number[]>([]);
+  const [errors, setErrors] = useState<{ fullName?: string; dateOfBirth?: string; submit?: string }>({});
   // Snapshot taken once at mount — a successful registration legitimately clears
   // pendingPhoneNumber via loginSuccess, and re-checking the live value would
   // fire this guard while navigating away to Home, redirecting back instead.
@@ -32,24 +35,34 @@ export default function RegisterScreen() {
     return <Redirect href="/(auth)/mobile-number" />;
   }
 
-  function toggleAspiring(category: AspiringCategory) {
+  function toggleAspiring(programId: number) {
     setAspiringFor((current) => {
-      if (current.includes(category)) return current.filter((item) => item !== category);
+      if (current.includes(programId)) return current.filter((item) => item !== programId);
       if (current.length >= 5) return current;
-      return [...current, category];
+      return [...current, programId];
     });
   }
 
   async function handleRegister() {
     const fullNameError = validateFullName(fullName);
-    const emailError = validateEmail(email);
-    if (fullNameError || emailError) {
-      setErrors({ fullName: fullNameError ?? undefined, email: emailError ?? undefined });
+    const dob = dateOfBirth.trim() ? parseDisplayDate(dateOfBirth) : '';
+    const dateOfBirthError = dob === null ? 'Use format DD-MM-YYYY' : undefined;
+    if (fullNameError || dateOfBirthError) {
+      setErrors({ fullName: fullNameError ?? undefined, dateOfBirth: dateOfBirthError });
       return;
     }
     setErrors({});
-    await completeRegistration({ fullName, email, dateOfBirth, aspiringFor });
-    router.replace('/(tabs)/home');
+    try {
+      const { warning } = await completeRegistration({
+        fullName: fullName.trim(),
+        dateOfBirth: dob ?? '',
+        programIds: aspiringFor,
+      });
+      if (warning) Alert.alert('Registered', `Your account was created, but some details were not saved:\n${warning}`);
+      router.replace('/(tabs)/home');
+    } catch (err) {
+      setErrors({ submit: errorMessage(err, 'Could not complete registration') });
+    }
   }
 
   return (
@@ -59,25 +72,29 @@ export default function RegisterScreen() {
         <Text style={styles.subtitle}>Tell us a bit about yourself to get started.</Text>
 
         <Input label="Full Name" value={fullName} onChangeText={setFullName} placeholder="Full Name" error={errors.fullName} />
-        <Input label="Email ID" value={email} onChangeText={setEmail} placeholder="Email ID" keyboardType="email-address" autoCapitalize="none" error={errors.email} />
-        <Input label="Date of Birth" value={dateOfBirth} onChangeText={setDateOfBirth} placeholder="DD-MM-YYYY" />
+        <Input label="Date of Birth" value={dateOfBirth} onChangeText={setDateOfBirth} placeholder="DD-MM-YYYY" error={errors.dateOfBirth} />
 
         <View style={styles.aspiringBlock}>
           <Text style={styles.aspiringLabel}>Aspiring for (select up to 5)</Text>
           <View style={styles.chipRow}>
-            {ASPIRING_CATEGORIES.map((category) => {
-              const isSelected = aspiringFor.includes(category);
+            {programs.map((program) => {
+              const isSelected = aspiringFor.includes(program.id);
               return (
                 <Pressable
-                  key={category}
-                  onPress={() => toggleAspiring(category)}
+                  key={program.id}
+                  onPress={() => toggleAspiring(program.id)}
                   style={[styles.chip, isSelected && styles.chipSelected]}>
-                  <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>{category}</Text>
+                  <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>{program.name}</Text>
                 </Pressable>
               );
             })}
           </View>
+          {programsStatus === 'loading' && <Loader />}
+          {programsStatus === 'error' && (
+            <ErrorMessage message={programsError ?? 'Failed to load exams'} onRetry={reloadPrograms} />
+          )}
         </View>
+        {errors.submit ? <Text style={styles.submitError}>{errors.submit}</Text> : null}
       </ScrollView>
       <Button label="Register" onPress={handleRegister} loading={isSubmitting} style={styles.button} />
     </SafeAreaView>
@@ -134,6 +151,10 @@ const styles = StyleSheet.create({
   chipLabelSelected: {
     color: Colors.white,
     fontWeight: '600',
+  },
+  submitError: {
+    ...Typography.caption,
+    color: Colors.error,
   },
   button: {
     marginHorizontal: Spacing.lg,

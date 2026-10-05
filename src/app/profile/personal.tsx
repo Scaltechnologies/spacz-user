@@ -8,48 +8,70 @@ import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
 import { useProfile } from '@/hooks/useProfile';
-import { User } from '@/types/user';
+import { errorMessage } from '@/services/api';
+import { User, UserProfilePatch } from '@/types/user';
 
-type EditableField = 'fullName' | 'phoneNumber' | 'emergencyContact' | 'email' | 'address';
+type EditableField = keyof UserProfilePatch;
+type Field = EditableField | 'email';
 
-const FIELD_LABELS: Record<EditableField, string> = {
+// Only fields stored by user-service. Email is managed by auth-service and is read-only here.
+const FIELD_LABELS: Record<Field, string> = {
   fullName: 'Full Name',
   phoneNumber: 'Phone Number',
-  emergencyContact: 'Emergency Contact',
   email: 'Email Id',
-  address: 'Address',
+  city: 'City',
+  state: 'State',
 };
 
+function fieldValue(user: User, field: Field): string | null {
+  return (user[field] as string | null) || null;
+}
+
 export default function PersonalInformationScreen() {
-  const { profile, status, error, update } = useProfile();
+  const { profile, status, error, refresh, update } = useProfile();
   const [editingField, setEditingField] = useState<EditableField | null>(null);
   const [draftValue, setDraftValue] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
+  if (status === 'error') return <ErrorMessage message={error ?? 'Failed to load profile'} onRetry={refresh} />;
   if (status === 'loading' || !profile) return <Loader fullScreen />;
-  if (status === 'error') return <ErrorMessage message={error ?? 'Failed to load profile'} />;
 
   function startEditing(field: EditableField, currentValue: string | null) {
     setEditingField(field);
     setDraftValue(currentValue ?? '');
+    setSaveError(null);
   }
 
   async function saveField(field: EditableField) {
-    await update({ [field]: draftValue } as Partial<User>);
-    setEditingField(null);
+    if (field === 'fullName' && !draftValue.trim()) {
+      setSaveError('Full name is required');
+      return;
+    }
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await update({ [field]: draftValue });
+      setEditingField(null);
+    } catch (err) {
+      setSaveError(errorMessage(err, 'Could not save'));
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
     <ScreenContainer title="Personal Information" showBackButton scroll>
-      {(Object.keys(FIELD_LABELS) as EditableField[]).map((field) => {
-        const value = profile[field] as string | null;
+      {(Object.keys(FIELD_LABELS) as Field[]).map((field) => {
+        const value = fieldValue(profile, field);
         const isEditing = editingField === field;
         return (
           <View key={field} style={styles.row}>
             <View style={styles.rowHeader}>
               <Text style={styles.label}>{FIELD_LABELS[field]}</Text>
-              {isEditing ? (
-                <Pressable onPress={() => saveField(field)}>
-                  <Text style={styles.action}>Save</Text>
+              {field === 'email' ? null : isEditing ? (
+                <Pressable onPress={() => saveField(field)} disabled={isSaving}>
+                  <Text style={styles.action}>{isSaving ? 'Saving…' : 'Save'}</Text>
                 </Pressable>
               ) : (
                 <Pressable onPress={() => startEditing(field, value)}>
@@ -62,6 +84,7 @@ export default function PersonalInformationScreen() {
             ) : (
               <Text style={styles.value}>{value ?? 'Not Provided'}</Text>
             )}
+            {isEditing && saveError ? <Text style={styles.error}>{saveError}</Text> : null}
           </View>
         );
       })}
@@ -100,5 +123,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderBottomWidth: 1,
     borderBottomColor: Colors.primary,
+  },
+  error: {
+    ...Typography.caption,
+    color: Colors.error,
+    marginTop: 2,
   },
 });

@@ -27,13 +27,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="meal-card"
-        options={{
-          title: 'Meal Card',
-          tabBarIcon: ({ color, size }) => <Ionicons name="fast-food-outline" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',

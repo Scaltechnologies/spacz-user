@@ -25,7 +25,7 @@ export function BookingCard({ booking, onPress }: BookingCardProps) {
         </Text>
         <Text style={styles.dates}>{formatDateRange(booking.validFrom, booking.validTo)}</Text>
         <Text style={styles.seat}>Seat no: {booking.seatNumbers.join(', ')}</Text>
-        <Text style={styles.bookingId}>#{booking.id.slice(-6)}</Text>
+        <Text style={styles.bookingId}>#{booking.reference}</Text>
       </View>
       <PaymentStatusBadge status={booking.paymentStatus} />
     </Pressable>

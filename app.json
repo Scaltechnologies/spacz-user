@@ -33,7 +33,19 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SPACZ uses your location to show study centers near you."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "SPACZ needs access to your photos to upload your Aadhaar documents."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

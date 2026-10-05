@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ScreenContainer } from '@/components/common/ScreenContainer';
-import { Badge } from '@/components/ui/Badge';
+import { PaymentStatusBadge } from '@/components/booking/PaymentStatusBadge';
 import { Button } from '@/components/ui/Button';
 import { Divider } from '@/components/ui/Divider';
 import { ErrorMessage } from '@/components/ui/ErrorMessage';
@@ -14,6 +14,7 @@ import { Colors } from '@/constants/colors';
 import { Config } from '@/constants/config';
 import { Radius, Spacing } from '@/constants/spacing';
 import { Typography } from '@/constants/typography';
+import { errorMessage } from '@/services/api';
 import * as bookingService from '@/services/booking.service';
 import { Booking } from '@/types/booking';
 import { formatDate } from '@/utils/date';
@@ -21,23 +22,40 @@ import { formatCurrency } from '@/utils/formatting';
 
 export default function BookingDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [booking, setBooking] = useState<Booking | null | undefined>(undefined);
+  const [booking, setBooking] = useState<Booking | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [isPaying, setIsPaying] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!id) return;
-    bookingService.getBookingById(id).then(setBooking);
+    setLoadError(null);
+    bookingService
+      .getBookingById(id)
+      .then(setBooking)
+      .catch((err) => setLoadError(errorMessage(err, 'Booking not found')));
   }, [id]);
 
+  useEffect(() => {
+    Promise.resolve().then(load);
+  }, [load]);
+
+  // The backend has no payment API; POST /api/bookings/{id}/confirm is its post-payment step.
   async function handlePayNow() {
     if (!booking) return;
-    const updated = await bookingService.payBooking(booking.id);
-    if (updated) setBooking(updated);
+    setIsPaying(true);
+    setPayError(null);
+    try {
+      setBooking(await bookingService.confirmBooking(booking.id));
+    } catch (err) {
+      setPayError(errorMessage(err, 'Could not confirm booking'));
+    } finally {
+      setIsPaying(false);
+    }
   }
 
-  if (booking === undefined) return <Loader fullScreen />;
-  if (booking === null) return <ErrorMessage message="Booking not found" />;
-
-  const isPaid = booking.paymentStatus === 'PAID';
+  if (loadError) return <ErrorMessage message={loadError} onRetry={load} />;
+  if (!booking) return <Loader fullScreen />;
 
   return (
     <ScreenContainer title="Booking Details" showBackButton>
@@ -50,7 +68,7 @@ export default function BookingDetailsScreen() {
         <Text style={styles.centreLocation}>{booking.studyCentreLocation}</Text>
 
         <Text style={styles.bookingIdLabel}>Booking ID</Text>
-        <Text style={styles.bookingId}>{booking.id}</Text>
+        <Text style={styles.bookingId}>{booking.reference}</Text>
 
         <View style={styles.seatRow}>
           <Ionicons name="body-outline" size={18} color={Colors.primary} />
@@ -77,17 +95,20 @@ export default function BookingDetailsScreen() {
             <Text style={styles.label}>Amount</Text>
           </View>
           <View>
-            <Text style={styles.value}>{booking.durationDays} Days</Text>
+            <Text style={styles.value}>{bookingService.formatBookingDuration(booking)}</Text>
             <Text style={styles.label}>Duration</Text>
           </View>
         </View>
 
         <View style={styles.row}>
           <Text style={styles.label}>Payment Status</Text>
-          <Badge label={isPaid ? 'Paid' : 'Not Paid'} tone={isPaid ? 'success' : 'error'} />
+          <PaymentStatusBadge status={booking.paymentStatus} />
         </View>
 
-        {!isPaid ? <Button label="Pay Now" onPress={handlePayNow} style={styles.payButton} /> : null}
+        {booking.status === 'PENDING' ? (
+          <Button label="Pay Now" onPress={handlePayNow} loading={isPaying} style={styles.payButton} />
+        ) : null}
+        {payError ? <Text style={styles.payError}>{payError}</Text> : null}
 
         <Text style={styles.support}>For support contact {Config.supportEmail}</Text>
       </ScrollView>
@@ -96,6 +117,10 @@ export default function BookingDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
+  payError: {
+    ...Typography.caption,
+    color: Colors.error,
+  },
   content: {
     gap: 4,
     paddingBottom: Spacing.xl,

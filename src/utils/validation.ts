@@ -22,6 +22,17 @@ export function validateFullName(value: string): string | null {
   return null;
 }
 
+/** Parses a DD-MM-YYYY date as typed in the app into ISO YYYY-MM-DD, or null when invalid. */
+export function parseDisplayDate(value: string): string | null {
+  const match = value.trim().match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (!match) return null;
+  const [, day, month, year] = match;
+  const iso = `${year}-${month}-${day}`;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== iso) return null;
+  return iso;
+}
+
 export function validateRequired(value: string, fieldLabel: string): string | null {
   if (!value.trim()) return `${fieldLabel} is required`;
   return null;

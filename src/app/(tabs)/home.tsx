@@ -1,22 +1,58 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ExclusiveBanner } from '@/components/home/ExclusiveBanner';
 import { HomeHeader } from '@/components/home/HomeHeader';
 import { HomeServiceCard } from '@/components/home/HomeServiceCard';
+import { formatOfferDiscount } from '@/components/home/OfferCard';
 import { SectionTitle } from '@/components/common/SectionTitle';
 import { Colors } from '@/constants/colors';
 import { Spacing } from '@/constants/spacing';
+import { useOffers } from '@/hooks/useOffers';
+import * as profileService from '@/services/profile.service';
 import { useAuthStore } from '@/store/authStore';
 
 export default function HomeScreen() {
   const user = useAuthStore((state) => state.user);
+  const updateUser = useAuthStore((state) => state.updateUser);
+  const [aspirations, setAspirations] = useState<string[]>([]);
+  const { offers, status: offersStatus, refresh: refreshOffers } = useOffers();
+
+  // Name and exams always come from the signed-in user's backend profile.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      profileService
+        .getProfile()
+        .then((profile) => !cancelled && updateUser(profile))
+        .catch(() => undefined);
+      profileService
+        .getMyPrograms()
+        .then((programs) => !cancelled && setAspirations(programs.map((program) => program.programName)))
+        .catch(() => undefined);
+      refreshOffers();
+      return () => {
+        cancelled = true;
+      };
+    }, [updateUser, refreshOffers])
+  );
+
+  const topOffer = offers[0];
+  const bannerDescription =
+    offersStatus === 'loading' || offersStatus === 'idle'
+      ? 'Loading offers…'
+      : offersStatus === 'error'
+        ? 'Unable to load offers. Tap to retry.'
+        : topOffer
+          ? `${topOffer.title} · ${formatOfferDiscount(topOffer)}${offers.length > 1 ? ` · +${offers.length - 1} more` : ''}`
+          : 'No offers available right now';
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <HomeHeader name={user?.fullName ?? 'Aspirant'} />
+        <HomeHeader name={user?.fullName || 'Aspirant'} aspirations={aspirations} />
 
         <HomeServiceCard
           icon="school-outline"
@@ -24,17 +60,12 @@ export default function HomeScreen() {
           description="Find and book your slot in one of the best and nearest study centers"
           onPress={() => router.push('/(tabs)/study-centre')}
         />
-        <HomeServiceCard
-          icon="fast-food-outline"
-          title="Meal Cards"
-          description="Find and book your slot in one of the best and nearest meal providers"
-          onPress={() => router.push('/(tabs)/meal-card')}
-        />
 
         <SectionTitle title="Exclusively for you" />
         <ExclusiveBanner
           title="Exclusive Offers"
-          description="Get early access to new study centres and meal partners near you."
+          description={bannerDescription}
+          onPress={() => (offersStatus === 'error' ? refreshOffers() : router.push('/offers'))}
         />
       </ScrollView>
     </SafeAreaView>
